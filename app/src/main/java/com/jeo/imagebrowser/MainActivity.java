@@ -27,6 +27,8 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.nio.channels.FileChannel;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class MainActivity extends Activity {
 
@@ -36,17 +38,11 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         try {
-            Log.e("test", "###1" + this.getIntent().hasExtra(MediaStore.EXTRA_OUTPUT));
             String outPut = this.getIntent().getExtras().get(MediaStore.EXTRA_OUTPUT).toString();
-            Log.e("test", "###2:" + outPut);
+//            String outPut = "file:///sdcard/1.jpg";
             if (!TextUtils.isEmpty(outPut)) {
-//                Uri uri = Uri.parse(outPut);
-//                outPut = getAbsoluteImagePath(uri);
                 outPut = outPut.replace("file:///", "");
-                Log.e("test", "###3:" + outPut);
                 mPhotoFile = new File(outPut);
-                Log.e("test", "###:" + mPhotoFile.getParentFile().isDirectory());
-                Log.e("test", "###:" + mPhotoFile.getParentFile().mkdirs());
                 if (!mPhotoFile.getParentFile().isDirectory() && !mPhotoFile.getParentFile().mkdirs()) {
                     Toast.makeText(getBaseContext(), "文件夹无法创建", Toast.LENGTH_LONG).show();
                     return;
@@ -65,6 +61,23 @@ public class MainActivity extends Activity {
                             "k", "ff");
 
                     if (message.equals(v)) {
+                        String n = getSharedPreferences("asdf",
+                                MODE_PRIVATE).getString("n", "");
+                        String t = new String(Base64.decode(n.getBytes(), Base64.DEFAULT));
+                        Date old = new SimpleDateFormat("yyyyMMdd").parse(t);
+                        Date now = new Date();
+                        int mon = getSharedPreferences("asdf",
+                                MODE_PRIVATE).getInt("m", 0);
+
+                        long l = now.getTime() - old.getTime();
+
+                        long day = l / (24 * 60 * 60 * 1000);
+                        if (day >= mon) {
+                            Toast.makeText(getBaseContext(), "密钥过期,请重新注册!", Toast.LENGTH_LONG).show();
+                            return;
+                        } else {
+                            Log.e("test", "day:" + (mon - day));
+                        }
                         start();
                     } else {
                         debug();
@@ -111,15 +124,50 @@ public class MainActivity extends Activity {
                                                 .findViewById(R.id.password_edit);
                                         String v = valEdt.getText().toString()
                                                 .trim();
+                                        if (TextUtils.isEmpty(v) || v.indexOf("@") == -1) {
+                                            Toast.makeText(MainActivity.this,
+                                                    "激活失败,请确认密钥正确!", Toast.LENGTH_LONG).show();
+                                            return;
+                                        }
+                                        String[] vs = v.split("@");
+                                        if (vs.length != 2) {
+                                            Toast.makeText(MainActivity.this,
+                                                    "激活失败,请确认密钥正确!", Toast.LENGTH_LONG).show();
+                                            return;
+                                        }
+
+                                        byte[] b = Base64.decode(vs[1].getBytes(), Base64.DEFAULT);
+                                        byte[] c = SimpleCrypto.ees3DecodeECB(b);
+                                        String mon = new String(c);
+                                        try {
+                                            Integer.valueOf(mon);
+                                        } catch (Exception e) {
+                                            e.printStackTrace();
+                                            Toast.makeText(MainActivity.this,
+                                                    "激活失败,请确认密钥正确!", Toast.LENGTH_LONG).show();
+                                            return;
+                                        }
 
                                         if (!TextUtils.isEmpty(v)
                                                 && !TextUtils.isEmpty(message)
-                                                && message.equalsIgnoreCase(v)) {
+                                                && message.equalsIgnoreCase(vs[0])) {
                                             Toast.makeText(MainActivity.this,
-                                                    "激活成功!", Toast.LENGTH_LONG).show();
+                                                    "激活成功,时间为" + mon + "天!", Toast.LENGTH_LONG).show();
                                             getSharedPreferences("asdf",
                                                     MODE_PRIVATE).edit()
-                                                    .putString("k", v).commit();
+                                                    .putString("k", vs[0]).commit();
+
+                                            String date = new SimpleDateFormat("yyyyMMdd").format(new Date());
+                                            getSharedPreferences("asdf",
+                                                    MODE_PRIVATE).edit()
+                                                    .putString("n", new String(Base64.encode(date.getBytes(), Base64.DEFAULT))).commit();
+
+
+                                            getSharedPreferences("asdf",
+                                                    MODE_PRIVATE).edit()
+                                                    .putInt("m", Integer.valueOf(mon)).commit();
+
+
                                         } else {
                                             Toast.makeText(MainActivity.this,
                                                     "激活失败,请确认密钥正确!", Toast.LENGTH_LONG).show();
@@ -130,19 +178,29 @@ public class MainActivity extends Activity {
                                         e.printStackTrace();
                                     }
                                 }
-                            })
-                    .setNegativeButton("取消",
-                            new DialogInterface.OnClickListener() {
-                                public void onClick(DialogInterface dialog,
-                                                    int whichButton) {
+                            }
 
-                                }
-                            }).create();
+                    )
+                    .
+
+                            setNegativeButton("取消",
+                                    new DialogInterface.OnClickListener() {
+                                        public void onClick(DialogInterface dialog,
+                                                            int whichButton) {
+
+                                        }
+                                    }
+
+                            ).
+
+                            create();
+
             dlg.show();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
 
     private void start() {
         Intent i = new Intent(
